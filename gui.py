@@ -45,8 +45,8 @@ def generate_info_image(m, guinfo, uid, output_path: Path):
     for i in range(6):
         turtle_idx = guinum[i]
         turtle_info = guinfo["info"][turtle_idx]
-        spd_basic = int(turtle_info["spd"] * 2 + turtle_info["bas"] * 8)
-        spd_max = turtle_info["spd"] * 10 + turtle_info["bas"] * 8
+        spd_basic = int(turtle_info["spd"] * 2 + turtle_info["bas"] * 5)
+        spd_max = turtle_info["spd"] * 10 + turtle_info["bas"] * 5
         draw.text((0, 110 + i * 110), f"{i}号跑道: {turtle_info['name']}", font=setFont2, fill="#1f1e33")
         draw.text((500, 110 + i * 110), f"速度：", font=setFont2, fill="#1f1e33")
         draw.rectangle([(650, 120 + i * 110),(651 + spd_basic, 156 + i * 110)],fill="#353535", outline="#353535", width=2)
@@ -178,7 +178,7 @@ async def handle_first_receive(matcher: Matcher, event: Event, text: Message = C
         def getRnk():
             ranks = [0] * 7
             currentPos = 1
-            for pos in range(1500, -1500, -1):
+            for pos in range(3200, -3200, -1):
                 for j in range(6):
                     if run_positions[j] == pos:
                         ranks[currentPos] = j
@@ -192,7 +192,7 @@ async def handle_first_receive(matcher: Matcher, event: Event, text: Message = C
             currentPos = 1
             ranks = [0] * 7
             if guinfo["info"][guinum[gid]]["arg1"] > 0:
-                for pos in range(1500, -1000, -1):
+                for pos in range(3200, -3200, -1):
                     for j in range(6):
                         if run_positions[j] == pos:
                             ranks[j] = currentPos
@@ -202,7 +202,7 @@ async def handle_first_receive(matcher: Matcher, event: Event, text: Message = C
                 if ranks[gid] <= guinfo["info"][guinum[gid]]["arg1"]:
                     skill_spd[gid] += guinfo["info"][guinum[gid]]["arg2"]
             else:
-                for pos in range(-1000, 1500):
+                for pos in range(-3200, 3200):
                     for j in range(6):
                         if run_positions[j] == pos:
                             ranks[j] = currentPos
@@ -222,7 +222,7 @@ async def handle_first_receive(matcher: Matcher, event: Event, text: Message = C
             skill_spd[(gid + 1) % 6] -= guinfo["info"][guinum[gid]]["arg1"]
 
         def trickroomSkill(gid, t):
-            
+            nonlocal trick_room
             trick_room = 1
             basic_speed[gid] += int(random.random() * guinfo["info"][guinum[gid]]["spd"] * 1.2+ guinfo["info"][guinum[gid]][
                 "bas"] + guinfo["info"][guinum[gid]]["spd"] * 0.4)
@@ -256,8 +256,22 @@ async def handle_first_receive(matcher: Matcher, event: Event, text: Message = C
             g_val = int(random.random() * 10000)
             basic_speed[gid] += guinfo["info"][guinum[gid]]["arg1"] if g_val > 5000 else guinfo["info"][guinum[gid]]["arg2"]
 
+        def mimicSkill(gid, t):
+            count = 0
+            for i in range(6):
+                if guinfo["info"][guinum[i]]["skl"] != -4:
+                    basic_speed[gid] += basic_speed[i] 
+                    count += 1
+
+            if count != 0:
+                basic_speed[gid] = int(basic_speed[gid] * 1.0 / count) + 5
+            else:
+                basic_speed[gid] = 5
+
+
+
         # 技能函数映射，正负值均可通过负索引访问对应函数
-        skill_functions = [percSpd, fixSpd, posSpd, mudSkill, posAtk, trickroomSkill, halfHalf, skillFactorModify, clearanceSkill, noSkl]
+        skill_functions = [percSpd, fixSpd, posSpd, mudSkill, posAtk, trickroomSkill, halfHalf, mimicSkill, skillFactorModify, clearanceSkill, noSkl]
 
         # 模拟比赛帧（每帧生成一张图片）
         while True:
@@ -324,6 +338,7 @@ async def handle_first_receive(matcher: Matcher, event: Event, text: Message = C
 
             images.append(frame_image)
 
+
             # 检查是否有龟到达终点或达到最大帧数
             if any(pos >= 468 for pos in run_positions) or frame_index >= 20:
                 break
@@ -334,7 +349,7 @@ async def handle_first_receive(matcher: Matcher, event: Event, text: Message = C
         currentPos = 1
         winning_lane = None
         colorr = ["#123456", "#cc0000", "#cccc00", "#00cc00", "#00cccc", "#0000cc", "#000000"]
-        for pos in range(1500, -1500, -1):
+        for pos in range(3200, -3200, -1):
             for j in range(6):
                 if run_positions[j] == pos:
                     draw.text((160, j * 50 + 9), "%d位: %.01f%%"%(currentPos, pos / 4.68), font=setFont,
@@ -346,9 +361,14 @@ async def handle_first_receive(matcher: Matcher, event: Event, text: Message = C
                     currentPos += 1
             if currentPos == 7:
                 break
+        
+        #绘制胜利图标
+        winning_img = Image.open(TURTLE_DIR / f"iwai.png").convert("RGBA")
+        winning_img_resized = winning_img.resize((32, 32))
+        frame_image.paste(winning_img_resized, (130, winning_lane * 50 + 9), winning_img_resized)
 
         # 为了便于观看，添加几帧静止的最终帧
-        for _ in range(7):
+        for _ in range(9):
             images.append(frame_image)
         gif_path = TURTLE_DIR / "saigui.gif"
         images[0].save(gif_path, save_all=True, append_images=images[1:], optimize=False, duration=100, loop=0)
@@ -358,7 +378,7 @@ async def handle_first_receive(matcher: Matcher, event: Event, text: Message = C
         if winning_lane is None or len(m_data["bet"][winning_lane]) == 0:
             await gui.send("此次无人猜中捏")
         else:
-            msg = Message("恭喜以下人员猜中：")
+            msg = Message("恭喜")
             for bettor in m_data["bet"][winning_lane]:
-                msg += Message(f"[CQ:at,qq={bettor}]")
+                msg += Message(f"[CQ:at,qq={bettor}]")    
             await gui.send(msg)
